@@ -48,7 +48,7 @@ Stack* createStack(int capacity) {
     return stack;
 }
 
-int isEmpty(Stack* stack) {
+char isEmpty(Stack* stack) {
     return stack->top == -1;
 }
 
