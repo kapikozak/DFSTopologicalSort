@@ -1,187 +1,166 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_VERTICES 100
-
 typedef enum {
-    WHITE,
-    GRAY,
-    BLACK
-} Color;
+    white,
+    grey,
+    black,
+} Colour;
 
-typedef struct Vertex {
-    Color color;
-    int b;
-    int f;
-    int prev;
-} Vertex;
+struct ListNode {
+    int val;
+    struct ListNode* next;
+};
 
-typedef struct Node {
-    int vertexIndex;
-    struct Node* next;
-} Node;
+struct Graph {
+    int nv;
+    struct ListNode** al;
+};
 
-typedef struct {
-    int numOfVertices;
-    Node* adjLists[MAX_VERTICES];
-} Graph;
+void initGraph(struct Graph* g, int numOfVertices) {
+    g->nv = numOfVertices;
+    g->al = (struct ListNode**)malloc((g->nv) * sizeof(struct ListNode*));
+    if (g->al) {
+        for (int i = 0; i < g->nv; i++) {
+            g->al[i] = NULL;
+        }
+    } else {
+        fprintf(stderr, "Memory allocation failed for Graph.\n");
+        exit(EXIT_FAILURE);
+    }
+} /*initGraph*/
+
+void addEdge(struct Graph* g, int v1, int v2) {
+    struct ListNode* edge = (struct ListNode*)malloc(sizeof(struct ListNode));
+    if (edge) {
+        edge->val = v2;
+        edge->next = g->al[v1];
+        g->al[v1] = edge;
+    } else {
+        fprintf(stderr, "Memory allocation failed for edge: (%d, %d).\n", v1, v2);
+        exit(EXIT_FAILURE);
+    }
+} /*addEdge*/
+
+void freeGraph(struct Graph* g) {
+    for (int i = 0; i < g->nv; i++) {
+        while (g->al[i]) {
+            struct ListNode *tmp = g->al[i];
+            g->al[i] = g->al[i]->next;
+            free(tmp);
+        }
+    }
+    free(g->al);
+} /*freeGraph*/
 
 typedef struct {
     int top;
-    int capacity;
     int* data;
 } Stack;
 
-Stack* createStack(int capacity) {
-    Stack* stack = (Stack*)malloc(sizeof(Stack));
-    if (!stack) {
-        printf("Memory allocation failed for stack\n");
+void initStack(Stack* s, int capacity) {
+    s->top = -1;
+    s->data = (int*)malloc(capacity * sizeof(int));
+    if (!s->data) {
+        fprintf(stderr, "Memory allocation failed for Stack.\n");
         exit(EXIT_FAILURE);
     }
-    stack->top = -1;
-    stack->capacity = capacity;
-    stack->data = (int*)malloc(capacity * sizeof(int));
-    if (!stack->data) {
-        printf("Memory allocation failed for data in stack\n");
+} /*initStack*/
+
+void push(Stack* s, int elem) {
+    s->data[++s->top] = elem;
+} /*push*/
+
+void pop(Stack* s, int* elem) {
+    *elem = s->data[s->top--];
+} /*pop*/
+
+int isEmpty(Stack* s) {
+    return s->top == -1;
+} /*isEmpty*/
+
+void freeStack(Stack* s) {
+    free(s->data);
+    s->data = NULL;
+} /*freeStack*/
+
+int isCycled;
+
+void rDFS(struct Graph* g, Stack* s, Colour* colours, int v) {
+    int u;
+    colours[v] = grey;
+    struct ListNode* curr = g->al[v];
+    while (curr) {
+        u = curr->val;
+        if (colours[u] == white) {
+            rDFS(g, s, colours, u);
+        } else if (colours[u] == grey){
+            isCycled = 1;
+        }
+        curr = curr->next;
+    }
+    colours[v] = black;
+    push(s, v);
+} /*rDFS*/
+
+void DFS(struct Graph* g, Stack* s) {
+    Colour* colours = (Colour*)calloc(g->nv, sizeof(Colour));
+    if (colours) {
+        isCycled = 0;
+        for (int i = 0; i < g->nv; i++) {
+            if (colours[i] == white) {
+                rDFS(g, s, colours, i);
+            }
+        }
+        free(colours);
+    } else {
+        printf("Memory allocation failed for colours array.\n");
         exit(EXIT_FAILURE);
     }
-    return stack;
-}
+} /*DFS*/
 
-char isEmpty(Stack* stack) {
-    return stack->top == -1;
-}
-
-void freeStack(Stack* stack) {
-    free(stack->data);
-    free(stack);
-}
-
-void push(Stack* stack, int p) {
-    stack->data[++stack->top] = p;
-}
-
-int pop(Stack* stack) {
-    return stack->data[stack->top--];
-}
-
-Graph* createGraph(int vertices) {
-    Graph* graph = (Graph*)malloc(sizeof(Graph));
-    if (!graph) {
-        printf("Memory allocation failed for graph\n");
-        exit(EXIT_FAILURE);
-    }
-    graph->numOfVertices = vertices;
-    for (int i = 0; i < vertices; i++) {
-        graph->adjLists[i] = NULL;
-    }
-    return graph;
-}
-
-void addEdge(Graph* graph, int src, int dest) {
-    Node* newNode = (Node*)malloc(sizeof(Node));
-    if (!newNode) {
-        printf("Memory allocation failed for edge: (%d -> %d)\n", src, dest);
-        exit(EXIT_FAILURE);
-    }
-    newNode->vertexIndex = dest;
-    newNode->next = graph->adjLists[src];
-    graph->adjLists[src] = newNode;
-}
-
-void freeGraph(Graph* graph) {
-    for (int i = 0; i < graph->numOfVertices; i++) {
-        Node* temp = graph->adjLists[i];
-        while (temp) {
-            Node* toFree = temp;
-            temp = temp->next;
-            free(toFree);
+void printTopologicalSort(Stack* s) {
+    if (isCycled) {
+        printf("Graph is cycled, topological sort cannot be performed.\n");
+    } else {
+        int idx;
+        printf("Topological order of the vertices:\n");
+        while (!isEmpty(s)) {
+            pop(s, &idx);
+            printf("%d", idx);
+            if (!isEmpty(s)) {
+                printf(" -> ");
+            }
         }
+        printf("\n");
     }
-    free(graph);
-}
-
-int counter;
-int isCyclic;
-
-void recursiveDFS(Graph* graph, Stack* stack, Vertex vertices[], int v) {
-    vertices[v].color = GRAY;
-    vertices[v].b = counter++;
-
-    for (Node* temp = graph->adjLists[v]; temp; temp = temp->next) {
-        int u = temp->vertexIndex;
-        if (vertices[u].color == WHITE) {
-            vertices[u].prev = v;
-            recursiveDFS(graph, stack, vertices, u);
-        }
-        if (vertices[u].color == GRAY) {
-            isCyclic = 1;
-            return;
-        }
-    }
-    vertices[v].color = BLACK;
-    vertices[v].f = counter++;
-    push(stack, v);
-}
-
-void printTopologicalSort(Stack* stack) {
-    printf("Topological order of the vertices:\n");
-    while (!isEmpty(stack)) {
-        printf("%d ", pop(stack));
-    }
-    printf("\n");
-}
-
-void topologicalSort(Graph* graph, Vertex vertices[]) {
-    Stack* stack = createStack(graph->numOfVertices);
-    for (int i = 0; i < graph->numOfVertices; i++) {
-        vertices[i].color = WHITE;
-        vertices[i].prev = -1;
-    }
-    counter = 0;
-    isCyclic = 0;
-    for (int i = 0; i < graph->numOfVertices; i++) {
-        if (vertices[i].color == WHITE) {
-            recursiveDFS(graph, stack, vertices, i);
-        }
-    }
-    if (isCyclic) {
-        printf("Graph is cyclic, topological sort is not possible\n");
-        freeStack(stack);
-        return;
-    }
-
-    printTopologicalSort(stack);
-    freeStack(stack);
-}
+} /*printTopologicalSort*/
 
 int main() {
-    Graph* graph = createGraph(9);
-    Vertex* vertices = (Vertex*)malloc((graph->numOfVertices) * sizeof(Vertex));
-    if (!vertices) {
-        printf("Memory allocation failed for vertices\n");
-        freeGraph(graph);
-        exit(EXIT_FAILURE);
-    }
+    struct Graph g;
+    initGraph(&g, 9);
 
-    addEdge(graph, 2, 1);
-    addEdge(graph, 1, 0);
-    addEdge(graph, 0, 6);
-    addEdge(graph, 0, 8);
-    addEdge(graph, 3, 7);
-    addEdge(graph, 4, 0);
-    addEdge(graph, 4, 1);
-    addEdge(graph, 4, 5);
-    addEdge(graph, 4, 8);
-    addEdge(graph, 6, 8);
-    addEdge(graph, 7, 8);
-    addEdge(graph, 7, 6);
+    addEdge(&g, 2, 1);
+    addEdge(&g, 1, 0);
+    addEdge(&g, 0, 6);
+    addEdge(&g, 0, 8);
+    addEdge(&g, 6, 8);
+    addEdge(&g, 3, 7);
+    addEdge(&g, 7, 6);
+    addEdge(&g, 7, 8);
+    addEdge(&g, 4, 5);
+    addEdge(&g, 4, 0);
+    addEdge(&g, 4, 8);
+    addEdge(&g, 4, 1);
 
+    Stack s;
 
-    topologicalSort(graph, vertices);
+    initStack(&s, g.nv);
+    DFS(&g, &s);
 
-    freeGraph(graph);
-    free(vertices);
+    printTopologicalSort(&s);
 
+    freeStack(&s);
+    freeGraph(&g);
     return 0;
 }
